@@ -51,39 +51,39 @@ _start:
 	pushw	%dx
 
 	/* print a notification message on the screen */
-	pushw	%si
+	pushw	%si		/* %si对应boot.S中disk_address_packet处的地址 */
 	MSG(notification_string)
 	popw	%si
 
 	/* this sets up for the first run through "bootloop" */
-	movw	$LOCAL(firstlist), %di
+	movw	$LOCAL(firstlist), %di	/* $LOCAL(firstlist)的地址赋给%di */
 
 	/* save the sector number of the second sector in %ebp */
-	movl	(%di), %ebp
+	movl	(%di), %ebp				/* %di指向的内存的内容（4字节）赋值给%ebp，结果%ebp=0x00 00 00 02，即从哪个扇区开始读core.img */
 
         /* this is the loop for reading the rest of the kernel in */
-LOCAL(bootloop):
+LOCAL(bootloop):	/* 进入外层循环LOCAL(bootloop)，外层循环每次遍历一个first list项。 */
 
 	/* check the number of sectors to read */
-	cmpw	$0, 8(%di)
+	cmpw	$0, 8(%di)		/* 8(%di)对应上面的blocklist_default_len，也即即将读取的扇区数，该值0会在生成该段程序时改写成正确的数值。因为后面循环会递减该值，如果该值等于0，表示将硬盘的所有数据搬到了内存中，此时跳转到LOCAL(bootit)中。 */
 
 	/* if zero, go to the start function */
 	je	LOCAL(bootit)
 
-LOCAL(setup_sectors):
+LOCAL(setup_sectors): 		/* 然后进入内层循环，int 0x13中断读取硬盘一次最大只能读取0x7f个扇区，因此需要循环读取。  */
 	/* check if we use LBA or CHS */
-	cmpb	$0, -1(%si)
+	cmpb	$0, -1(%si)			/* 首先从boot.S的mode地址处（-1(%si)）获得硬盘的模式，如果为0，表示为CHS模式，跳转到LOCAL(chs_mode)，否则继续执行。 */
 
 	/* use CHS if zero, LBA otherwise */
 	je	LOCAL(chs_mode)
 
 	/* load logical sector start */
-	movl	(%di), %ebx
+	movl	(%di), %ebx			/* 把blocklist_default_start的高低位各4个字节保存在ebx和ecx寄存器中。表示硬盘LBA模式下扇区的逻辑起始地址，默认值为0x2，即第3个扇区。 */
 	movl	4(%di), %ecx
 
 	/* the maximum is limited to 0x7f because of Phoenix EDD */
 	xorl	%eax, %eax
-	movb	$0x7f, %al
+	movb	$0x7f, %al			/* 接着将al寄存器赋值0x7f，表示每次拷贝最大的扇区数，8(%di)表示剩余多少扇区没有拷贝，如果8(%di)小于al，则表示将要进行最后一次拷贝，此时将8(%di)赋值给al。 */
 
 	/* how many do we really want to read? */
 	cmpw	%ax, 8(%di)	/* compare against total number of sectors */
@@ -96,32 +96,32 @@ LOCAL(setup_sectors):
 
 1:
 	/* subtract from total */
-	subw	%ax, 8(%di)
+	subw	%ax, 8(%di)			/* 进入标号1，首先将剩余的扇区数8(%di)减去当前即将读出的扇区数al */
 
 	/* add into logical sector start */
-	addl	%eax, (%di)
-	adcl	$0, 4(%di)
+	addl	%eax, (%di)			/* 起始扇区数(%di)加上%eax，如果有进位，则需要将进位加到4(%di)中，这三条指令都是为下一次拷贝做准备。 */
+	adcl	$0, 4(%di)			/* Integer adds operand1 and the carry flag to operand2 and stores the result in operand2 */
 
 	/* set up disk address packet */
 
 	/* the size and the reserved byte */
-	movw	$0x0010, (%si)
+	movw	$0x0010, (%si)		/* (%si)指向disk_address_packet , 0x10是数据块的大小*/
 
 	/* the number of sectors */
-	movw	%ax, 2(%si)
+	movw	%ax, 2(%si)			/* 0x007f是本次传输的扇区数 */
 
 	/* the absolute address */
-	movl	%ebx, 8(%si)
+	movl	%ebx, 8(%si)		/* 8(%si)和12(%si)保存了本次传输的起始扇区数，起始值为0x2 */
 	movl	%ecx, 12(%si)
 
 	/* the segment of buffer address */
-	movw	$GRUB_BOOT_MACHINE_BUFFER_SEG, 6(%si)
+	movw	$GRUB_BOOT_MACHINE_BUFFER_SEG, 6(%si)		/* 6(%si)保存了缓存地址，默认值为GRUB_BOOT_MACHINE_BUFFER_SEG，也即0x7000，和boot.S中的缓存地址一样 */
 
 	/* save %ax from destruction! */
-	pushw	%ax
+	pushw	%ax			/* 最后将本次读取的扇区数ax入栈 */
 
 	/* the offset of buffer address */
-	movw	$0, 4(%si)
+	movw	$0, 4(%si)	/* 将4(%si)清0 */
 
 /*
  * BIOS call "INT 0x13 Function 0x42" to read sectors from disk into memory
@@ -132,10 +132,10 @@ LOCAL(setup_sectors):
  *			%al = 0x0 on success; err code on failure
  */
 
-	movb	$0x42, %ah
+	movb	$0x42, %ah	/* 然后执行int 0x13中断，参数ah为0x42，执行读取。 */
 	int	$0x13
 
-	jc	LOCAL(read_error)
+	jc	LOCAL(read_error)	/* 如果CF置1，则发生错误，跳转到LOCAL(read_error) */
 
 	movw	$GRUB_BOOT_MACHINE_BUFFER_SEG, %bx
 	jmp	LOCAL(copy_buffer)
@@ -287,7 +287,7 @@ LOCAL(copy_buffer):
 	jne	LOCAL(setup_sectors)
 
 	/* update position to load from */
-	subw	$GRUB_BOOT_MACHINE_LIST_SIZE, %di
+	subw	$GRUB_BOOT_MACHINE_LIST_SIZE, %di	/* 12 */
 
 	/* jump to bootloop */
 	jmp	LOCAL(bootloop)
@@ -298,7 +298,7 @@ LOCAL(bootit):
 	/* print a newline */
 	MSG(notification_done)
 	popw	%dx	/* this makes sure %dl is our "boot" drive */
-	ljmp	$0, $(GRUB_BOOT_MACHINE_KERNEL_ADDR + 0x200)
+	ljmp	$0, $(GRUB_BOOT_MACHINE_KERNEL_ADDR + 0x200)	/* 0x0:8200 */
 
 
 /*
@@ -362,7 +362,7 @@ LOCAL(message):
 	.word 0
 	.word 0
 
-	.org 0x200 - GRUB_BOOT_MACHINE_LIST_SIZE
+	.org 0x200 - GRUB_BOOT_MACHINE_LIST_SIZE	/* 0x200即512，即第二个扇区数据的末尾。GRUB_BOOT_MACHINE_LIST_SIZE为12，表示一个first list项读取参数的字节数，最大一共15个first list项（14个有效），从上面也可以看出4+4+2+2=12。因此LOCAL(firstlist)处的地址就为0x1f4，该地址对应最后一个first list项。 */
 LOCAL(firstlist):	/* this label has to be before the first list entry!!! */
         /* fill the first data listing with the default */
 blocklist_default_start:
@@ -375,4 +375,4 @@ blocklist_default_len:
 	.word 0
 blocklist_default_seg:
 	/* this is the segment of the starting address to load the data into */
-	.word (GRUB_BOOT_MACHINE_KERNEL_SEG + 0x20)
+	.word (GRUB_BOOT_MACHINE_KERNEL_SEG + 0x20)	/* =0x0820，目标地址：0x8200:0 */
