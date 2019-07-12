@@ -317,6 +317,7 @@ kernel = {
   sparc64_ieee1275 = kern/sparc64/cache.S;
   sparc64_ieee1275 = kern/sparc64/dl.c;
   sparc64_ieee1275 = kern/sparc64/ieee1275/ieee1275.c;
+  sparc64_ieee1275 = disk/ieee1275/obdisk.c;
 
   arm = kern/arm/dl.c;
   arm = kern/arm/dl_helper.c;
@@ -394,7 +395,7 @@ program = {
 
   ldadd = 'kernel.exec$(EXEEXT)';
   ldadd = '$(MODULE_FILES)';
-  ldadd = 'gnulib/libgnu.a $(LIBINTL) $(LIBUTIL) $(LIBSDL) $(LIBUSB) $(LIBPCIACCESS) $(LIBDEVMAPPER) $(LIBZFS) $(LIBNVPAIR) $(LIBGEOM)';
+  ldadd = 'lib/gnulib/libgnu.a $(LIBINTL) $(LIBUTIL) $(LIBSDL) $(LIBUSB) $(LIBPCIACCESS) $(LIBDEVMAPPER) $(LIBZFS) $(LIBNVPAIR) $(LIBGEOM)';
 
   enable = emu;
 };
@@ -406,7 +407,7 @@ program = {
   emu_nodist = symlist.c;
 
   ldadd = 'kernel.exec$(EXEEXT)';
-  ldadd = 'gnulib/libgnu.a $(LIBINTL) $(LIBUTIL) $(LIBSDL) $(LIBUSB) $(LIBPCIACCESS) $(LIBDEVMAPPER) $(LIBZFS) $(LIBNVPAIR) $(LIBGEOM)';
+  ldadd = 'lib/gnulib/libgnu.a $(LIBINTL) $(LIBUTIL) $(LIBSDL) $(LIBUSB) $(LIBPCIACCESS) $(LIBDEVMAPPER) $(LIBZFS) $(LIBNVPAIR) $(LIBGEOM)';
 
   enable = emu;
 };
@@ -424,8 +425,14 @@ image = {
   i386_qemu_ldflags = '$(TARGET_IMG_BASE_LDOPT),$(GRUB_BOOT_MACHINE_LINK_ADDR)';
   i386_qemu_ccasflags = '-DGRUB_BOOT_MACHINE_LINK_ADDR=$(GRUB_BOOT_MACHINE_LINK_ADDR)';
 
-  sparc64_ieee1275_objcopyflags = '-O a.out-sunos-big';
-  sparc64_ieee1275_ldflags = ' -Wl,-Ttext=0x4000';
+  /* The entry point for a.out binaries on sparc64 starts
+     at 0x4000. Since we are writing the 32 bytes long a.out
+     header in the assembly code ourselves, we need to tell
+     the linker to adjust the start of the text segment to
+     0x4000 - 0x20 = 0x3fe0.
+   */
+  sparc64_ieee1275_ldflags = ' -Wl,-Ttext=0x3fe0';
+  sparc64_ieee1275_objcopyflags = '-O binary';
 
   objcopyflags = '-O binary';
   enable = i386_pc;
@@ -454,8 +461,10 @@ image = {
   i386_pc_ldflags = '$(TARGET_IMG_BASE_LDOPT),0x7C00';
 
   sparc64_ieee1275 = boot/sparc64/ieee1275/boot.S;
-  sparc64_ieee1275_objcopyflags = '-O a.out-sunos-big';
-  sparc64_ieee1275_ldflags = ' -Wl,-Ttext=0x4000';
+
+  /* See comment for sparc64_ieee1275_ldflags above. */
+  sparc64_ieee1275_ldflags = ' -Wl,-Ttext=0x3fe0';
+  sparc64_ieee1275_objcopyflags = '-O binary';
   sparc64_ieee1275_cppflags = '-DCDBOOT=1';
 
   objcopyflags = '-O binary';
@@ -730,7 +739,7 @@ module = {
   name = regexp;
   common = commands/regexp.c;
   common = commands/wildcard.c;
-  common = gnulib/regex.c;
+  common = lib/gnulib/regex.c;
   cflags = '$(CFLAGS_POSIX) $(CFLAGS_GNULIB)';
   cppflags = '$(CPPFLAGS_POSIX) $(CPPFLAGS_GNULIB)';
 };
@@ -1086,6 +1095,21 @@ module = {
 module = {
   name = sleep;
   common = commands/sleep.c;
+};
+
+module = {
+  name = smbios;
+
+  common = commands/smbios.c;
+  efi = commands/efi/smbios.c;
+  i386_pc = commands/i386/pc/smbios.c;
+  i386_coreboot = commands/i386/pc/smbios.c;
+  i386_multiboot = commands/i386/pc/smbios.c;
+
+  enable = efi;
+  enable = i386_pc;
+  enable = i386_coreboot;
+  enable = i386_multiboot;
 };
 
 module = {
@@ -2483,4 +2507,14 @@ module = {
   common = loader/i386/xen_file32.c;
   common = loader/i386/xen_file64.c;
   extra_dist = loader/i386/xen_fileXX.c;
+};
+module = {
+  name = rdmsr;
+  common = commands/i386/rdmsr.c;
+  enable = x86;
+};
+module = {
+  name = wrmsr;
+  common = commands/i386/wrmsr.c;
+  enable = x86;
 };

@@ -31,7 +31,7 @@ dnl (such as BUILD_CC, BUILD_CFLAGS, etc.) for the build type and variables
 dnl with the prefix "TARGET_" (such as TARGET_CC, TARGET_CFLAGS, etc.) are
 dnl used for the target type. See INSTALL for full list of variables.
 
-AC_INIT([GRUB],[2.03],[bug-grub@gnu.org])
+AC_INIT([GRUB],[2.05],[bug-grub@gnu.org])
 
 AC_CONFIG_AUX_DIR([build-aux])
 
@@ -45,8 +45,8 @@ save_program_prefix="${program_prefix}"
 AC_CANONICAL_TARGET
 program_prefix="${save_program_prefix}"
 
-AM_INIT_AUTOMAKE([1.10.1])
-AC_PREREQ(2.60)
+AM_INIT_AUTOMAKE([1.11])
+AC_PREREQ(2.63)
 AC_CONFIG_SRCDIR([include/grub/dl.h])
 AC_CONFIG_HEADER([config-util.h])
 
@@ -362,6 +362,7 @@ AC_CHECK_PROG(HAVE_CXX, $CXX, yes, no)
 
 AC_GNU_SOURCE
 AM_GNU_GETTEXT([external])
+AM_GNU_GETTEXT_VERSION([0.18.3])
 AC_SYS_LARGEFILE
 
 # Identify characteristics of the host architecture.
@@ -998,6 +999,17 @@ if test "x$grub_cv_cc_fno_unwind_tables" = xyes; then
   TARGET_CFLAGS="$TARGET_CFLAGS -fno-unwind-tables"
 fi
 
+# Do not generate .ident sections.
+AC_CACHE_CHECK([whether -fno-ident works], [grub_cv_cc_fno_ident], [
+  CFLAGS="$TARGET_CFLAGS -fno-ident"
+  AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],
+      [grub_cv_cc_fno_ident=yes],
+      [grub_cv_cc_fno_ident=no])
+])
+
+if test "x$grub_cv_cc_fno_ident" = xyes; then
+  TARGET_CFLAGS="$TARGET_CFLAGS -fno-ident"
+fi
 
 CFLAGS="$TARGET_CFLAGS"
 
@@ -1197,7 +1209,8 @@ if test "x$target_cpu" = xarm; then
   AC_CACHE_CHECK([for options to disable movt and movw], grub_cv_target_cc_mno_movt, [
     grub_cv_target_cc_mno_movt=no
     for cand in "-mno-movt" \
-		"-mllvm -arm-use-movt=0"; do
+		"-mllvm -arm-use-movt=0" \
+		"-mword-relocations"; do
       if test x"$grub_cv_target_cc_mno_movt" != xno ; then
         break
       fi
@@ -1227,12 +1240,12 @@ if test "x$target_cpu" = xarm; then
 fi
 
 AC_CACHE_CHECK([whether option -Qn works], grub_cv_target_cc_qn, [
-  CFLAGS="$TARGET_CFLAGS -Qn -Werror"
+  CFLAGS="$TARGET_CFLAGS -Qn -Qunused-arguments -Werror"
   AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],
 		    [grub_cv_target_cc_qn=yes],
 		    [grub_cv_target_cc_qn=no])])
 if test "x$grub_cv_target_cc_qn" = xyes; then
-  TARGET_CFLAGS="$TARGET_CFLAGS -Qn"
+  TARGET_CFLAGS="$TARGET_CFLAGS -Qn -Qunused-arguments"
 fi
 
 #
@@ -1394,7 +1407,7 @@ AC_SUBST(TARGET_NMFLAGS_DEFINED_ONLY)
 if test "$platform" != emu; then
 AC_CACHE_CHECK([whether -nostdinc -isystem works], [grub_cv_cc_isystem], [
   SAVED_CPPFLAGS="$CPPFLAGS"
-  CPPFLAGS="$TARGET_CPPFLAGS -nostdinc -isystem `$TARGET_CC -print-file-name=include`"
+  CPPFLAGS="$TARGET_CPPFLAGS -nostdlib -nostdinc -isystem `$TARGET_CC -print-file-name=include`"
   AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <stdarg.h>
 #include <stddef.h>
 int va_arg_func (int fixed, va_list args);]], [[]])],
@@ -2014,7 +2027,7 @@ fi
 
 AC_CONFIG_FILES([Makefile])
 AC_CONFIG_FILES([grub-core/Makefile])
-AC_CONFIG_FILES([grub-core/gnulib/Makefile])
+AC_CONFIG_FILES([grub-core/lib/gnulib/Makefile])
 AC_CONFIG_FILES([po/Makefile.in])
 AC_CONFIG_FILES([docs/Makefile])
 AC_CONFIG_FILES([util/bash-completion.d/Makefile])

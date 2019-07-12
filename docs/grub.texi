@@ -3931,6 +3931,7 @@ you forget a command, you can run the command @command{help}
 * play::                        Play a tune
 * probe::                       Retrieve device info
 * pxe_unload::                  Unload the PXE environment
+* rdmsr::                       Read values from model-specific registers
 * read::                        Read user input
 * reboot::                      Reboot your computer
 * regexp::                      Test if regular expression matches string
@@ -3943,6 +3944,7 @@ you forget a command, you can run the command @command{help}
 * sha256sum::                   Compute or check SHA256 hash
 * sha512sum::                   Compute or check SHA512 hash
 * sleep::                       Wait for a specified number of seconds
+* smbios::                      Retrieve SMBIOS information
 * source::                      Read a configuration file in same context
 * test::                        Check file types and compare values
 * true::                        Do nothing, successfully
@@ -3953,6 +3955,7 @@ you forget a command, you can run the command @command{help}
 * verify_detached::             Verify detached digital signature
 * videoinfo::                   List available video modes
 @comment * xen_*::              Xen boot commands for AArch64
+* wrmsr::                       Write values to model-specific registers
 * xen_hypervisor::              Load xen hypervisor binary (only on AArch64)
 * xen_module::                  Load xen modules for xen hypervisor (only on AArch64)
 @end menu
@@ -4769,9 +4772,11 @@ a rest.
 @node probe
 @subsection probe
 
-@deffn Command probe [@option{--set} var] @option{--driver}|@option{--partmap}|@option{--fs}|@option{--fs-uuid}|@option{--label} device
+@deffn Command probe [@option{--set} var] @option{--driver}|@option{--partmap}|@option{--fs}|@option{--fs-uuid}|@option{--label}|@option{--part-uuid} device
 Retrieve device information. If option @option{--set} is given, assign result
 to variable @var{var}, otherwise print information on the screen.
+
+The option @option{--part-uuid} is currently only implemented for GPT-formatted disks.
 @end deffn
 
 
@@ -4782,6 +4787,24 @@ to variable @var{var}, otherwise print information on the screen.
 Unload the PXE environment (@pxref{Network}).
 
 This command is only available on PC BIOS systems.
+@end deffn
+
+
+@node rdmsr
+@subsection rdmsr
+
+@deffn Command: rdmsr 0xADDR [-v VARNAME]
+Read a model-specific register at address 0xADDR. If the parameter
+@option{-v} is used and an environment variable @var{VARNAME} is
+given, set that environment variable to the value that was read.
+
+Please note that on SMP systems, reading from a MSR that has a
+scope per hardware thread, implies that the value that is returned
+only applies to the particular cpu/core/thread that runs the command.
+
+Also, if you specify a reserved or unimplemented MSR address, it will
+cause a general protection exception (which is not currently being handled)
+and the system will reboot.
 @end deffn
 
 
@@ -5063,6 +5086,80 @@ if timeout was interrupted by @key{ESC}.
 @end deffn
 
 
+@node smbios
+@subsection smbios
+
+@deffn Command smbios @
+ [@option{--type} @var{type}] @
+ [@option{--handle} @var{handle}] @
+ [@option{--match} @var{match}] @
+ (@option{--get-byte} | @option{--get-word} | @option{--get-dword} | @
+  @option{--get-qword} | @option{--get-string} | @option{--get-uuid}) @
+ @var{offset} @
+ [@option{--set} @var{variable}]
+Retrieve SMBIOS information.
+
+The @command{smbios} command returns the value of a field in an SMBIOS
+structure.  The following options determine which structure to select.
+
+@itemize @bullet
+@item
+Specifying @option{--type} will select structures with a matching
+@var{type}.  The type can be any integer from 0 to 255.
+@item
+Specifying @option{--handle} will select structures with a matching
+@var{handle}.  The handle can be any integer from 0 to 65535.
+@item
+Specifying @option{--match} will select structure number @var{match} in the
+filtered list of structures; e.g. @code{smbios --type 4 --match 2} will select
+the second Process Information (Type 4) structure.  The list is always ordered
+the same as the hardware's SMBIOS table.  The match number must be a positive
+integer.  If unspecified, the first matching structure will be selected.
+@end itemize
+
+The remaining options determine which field in the selected SMBIOS structure to
+return.  Only one of these options may be specified at a time.
+
+@itemize @bullet
+@item
+When given @option{--get-byte}, return the value of the byte
+at @var{offset} bytes into the selected SMBIOS structure.
+It will be formatted as an unsigned decimal integer.
+@item
+When given @option{--get-word}, return the value of the word (two bytes)
+at @var{offset} bytes into the selected SMBIOS structure.
+It will be formatted as an unsigned decimal integer.
+@item
+When given @option{--get-dword}, return the value of the dword (four bytes)
+at @var{offset} bytes into the selected SMBIOS structure.
+It will be formatted as an unsigned decimal integer.
+@item
+When given @option{--get-qword}, return the value of the qword (eight bytes)
+at @var{offset} bytes into the selected SMBIOS structure.
+It will be formatted as an unsigned decimal integer.
+@item
+When given @option{--get-string}, return the string with its index found
+at @var{offset} bytes into the selected SMBIOS structure.
+@item
+When given @option{--get-uuid}, return the value of the UUID (sixteen bytes)
+at @var{offset} bytes into the selected SMBIOS structure.
+It will be formatted as lower-case hyphenated hexadecimal digits, with the
+first three fields as little-endian, and the rest printed byte-by-byte.
+@end itemize
+
+The default action is to print the value of the requested field to the console,
+but a variable name can be specified with @option{--set} to store the value
+instead of printing it.
+
+For example, this will store and then display the system manufacturer's name.
+
+@example
+smbios --type 1 --get-string 4 --set system_manufacturer
+echo $system_manufacturer
+@end example
+@end deffn
+
+
 @node source
 @subsection source
 
@@ -5221,6 +5318,21 @@ successfully.  If validation fails, it is set to a non-zero value.
 
 @deffn Command videoinfo [[WxH]xD]
 List available video modes. If resolution is given, show only matching modes.
+@end deffn
+
+@node wrmsr
+@subsection wrmsr
+
+@deffn Command: wrmsr 0xADDR 0xVALUE
+Write a 0xVALUE to a model-specific register at address 0xADDR.
+
+Please note that on SMP systems, writing to a MSR that has a scope
+per hardware thread, implies that the value that is written
+only applies to the particular cpu/core/thread that runs the command.
+
+Also, if you specify a reserved or unimplemented MSR address, it will
+cause a general protection exception (which is not currently being handled)
+and the system will reboot.
 @end deffn
 
 @node xen_hypervisor
@@ -5716,11 +5828,11 @@ boot and the shim. This functionality is provided by the shim_lock module. It
 is recommend to build in this and other required modules into the @file{core.img}.
 All modules not stored in the @file{core.img} and the ACPI tables for the
 @command{acpi} command have to be signed, e.g. using PGP. Additionally, the
-@command{iorw} and the @command{memrw} commands are prohibited if the UEFI
-secure boot is enabled. This is done due to security reasons. All above
-mentioned requirements are enforced by the shim_lock module. And itself it
-is a persistent module which means that it cannot be unloaded if it was
-loaded into the memory.
+@command{iorw}, the @command{memrw} and the @command{wrmsr} commands are
+prohibited if the UEFI secure boot is enabled. This is done due to
+security reasons. All above mentioned requirements are enforced by the
+shim_lock module. And itself it is a persistent module which means that
+it cannot be unloaded if it was loaded into the memory.
 
 @node Measured Boot
 @section Measuring boot components
@@ -5831,6 +5943,8 @@ to install to is specified, UUID is used instead as well.
 @item USB                @tab yes     @tab yes      @tab yes          @tab yes
 @item chainloader        @tab local   @tab yes      @tab yes          @tab no
 @item cpuid              @tab partial @tab partial  @tab partial      @tab partial
+@item rdmsr              @tab partial @tab partial  @tab partial      @tab partial
+@item wrmsr              @tab partial @tab partial  @tab partial      @tab partial
 @item hints              @tab guess   @tab guess    @tab guess        @tab guess
 @item PCI                @tab yes     @tab yes      @tab yes          @tab yes
 @item badram             @tab yes     @tab yes      @tab yes          @tab yes
@@ -5850,6 +5964,8 @@ to install to is specified, UUID is used instead as well.
 @item USB                @tab yes         @tab yes       @tab yes           @tab no
 @item chainloader        @tab local       @tab local     @tab no            @tab local
 @item cpuid              @tab partial     @tab partial   @tab partial       @tab no
+@item rdmsr              @tab partial     @tab partial   @tab partial       @tab no
+@item wrmsr              @tab partial     @tab partial   @tab partial       @tab no
 @item hints              @tab guess       @tab guess     @tab good          @tab guess
 @item PCI                @tab yes         @tab yes       @tab yes           @tab no
 @item badram             @tab yes         @tab yes       @tab no            @tab yes
@@ -5869,6 +5985,8 @@ to install to is specified, UUID is used instead as well.
 @item USB                @tab yes         @tab no      @tab no      @tab no
 @item chainloader        @tab yes         @tab no      @tab no      @tab no
 @item cpuid              @tab no          @tab no      @tab no      @tab no
+@item rdmsr              @tab no          @tab no      @tab no      @tab no
+@item wrmsr              @tab no          @tab no      @tab no      @tab no
 @item hints              @tab good        @tab good    @tab good    @tab no
 @item PCI                @tab yes         @tab no      @tab no      @tab no
 @item badram             @tab yes (*)     @tab no      @tab no      @tab no
@@ -5888,6 +6006,8 @@ to install to is specified, UUID is used instead as well.
 @item USB                @tab N/A       @tab yes         @tab no
 @item chainloader        @tab yes       @tab no          @tab yes
 @item cpuid              @tab no        @tab no          @tab yes
+@item rdmsr              @tab no        @tab no          @tab yes
+@item wrmsr              @tab no        @tab no          @tab yes
 @item hints              @tab guess     @tab no          @tab no
 @item PCI                @tab no        @tab no          @tab no
 @item badram             @tab yes (*)   @tab no          @tab no
@@ -6088,6 +6208,7 @@ Required files are:
 
 @menu
 * GRUB only offers a rescue shell::
+* Firmware stalls instead of booting GRUB::
 @end menu
 
 
@@ -6156,6 +6277,17 @@ containing @file{/boot/grub}.  It will not be able to read from encrypted
 devices with unsupported encryption scheme, nor from file systems for which
 support has not yet been added to GRUB.
 @end itemize
+
+
+@node Firmware stalls instead of booting GRUB
+@section Firmware stalls instead of booting GRUB
+
+The EFI implementation of some older MacBook laptops stalls when it gets
+presented a grub-mkrescue ISO image for x86_64-efi target on an USB stick.
+Affected are models of year 2010 or earlier. Workaround is to zeroize the
+bytes 446 to 461 of the EFI partition, where mformat has put a partition table
+entry which claims partition start at block 0. This change will not hamper
+bootability on other machines.
 
 
 @node Invoking grub-install

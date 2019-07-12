@@ -1137,7 +1137,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 				       (int) sym_addr, (int) sym_addr);
 		       /* Data will be naturally aligned */
 		       if (image_target->id == IMAGE_EFI)
-			 sym_addr += 0x400;
+			 sym_addr += GRUB_PE32_SECTION_ALIGNMENT;
 		       *target = grub_host_to_target32 (grub_target_to_host32 (*target) + sym_addr);
 		     }
 		     break;
@@ -1232,8 +1232,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		 grub_uint32_t *t32 = (grub_uint32_t *) target;
 		 grub_uint16_t *t16 = (grub_uint16_t *) target;
 		 grub_uint8_t *t8 = (grub_uint8_t *) target;
-		 grub_int64_t off = (long)sym_addr - target_section_addr - offset
-				    - image_target->vaddr_offset;
+		 grub_int64_t off;
 
 		 /*
 		  * Instructions and instruction encoding are documented in the RISC-V
@@ -1243,6 +1242,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		  */
 
 		 sym_addr += addend;
+		 off = sym_addr - target_section_addr - offset - image_target->vaddr_offset;
 
 		 switch (ELF_R_TYPE (info))
 		   {
@@ -1298,7 +1298,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		       grub_uint32_t hi20, lo12;
 
 		       if (off != (grub_int32_t)off)
-			 grub_util_error ("target %lx not reachable from pc=%lx", (long)sym_addr, (long)target);
+			 grub_util_error ("target %lx not reachable from pc=%lx", (long)sym_addr, (long)((char *)target - (char *)e));
 
 		       hi20 = (off + 0x800) & 0xfffff000;
 		       lo12 = (off - hi20) & 0xfff;
@@ -1337,7 +1337,7 @@ SUFFIX (relocate_addrs) (Elf_Ehdr *e, struct section_metadata *smd,
 		       grub_int32_t hi20;
 
 		       if (off != (grub_int32_t)off)
-			 grub_util_error ("target %lx not reachable from pc=%lx", (long)sym_addr, (long)target);
+			 grub_util_error ("target %lx not reachable from pc=%lx", (long)sym_addr, (long)((char *)target - (char *)e));
 
 		       hi20 = (off + 0x800) & 0xfffff000;
 		       *t32 = grub_host_to_target32 ((grub_target_to_host32 (*t32) & 0xfff) | hi20);
@@ -2197,6 +2197,21 @@ SUFFIX (locate_sections) (Elf_Ehdr *e, const char *kernel_path,
 	  }
       }
 
+#ifdef MKIMAGE_ELF32
+  if (image_target->elf_target == EM_ARM)
+    {
+      grub_size_t tramp;
+
+      layout->kernel_size = ALIGN_UP (layout->kernel_size, 16);
+
+      tramp = arm_get_trampoline_size (e, smd->sections, smd->section_entsize,
+				       smd->num_sections, image_target);
+
+      layout->tramp_off = layout->kernel_size;
+      layout->kernel_size += ALIGN_UP (tramp, 16);
+    }
+#endif
+
   layout->kernel_size = ALIGN_UP (layout->kernel_size + image_target->vaddr_offset,
 			      image_target->section_align)
     - image_target->vaddr_offset;
@@ -2209,23 +2224,6 @@ SUFFIX (locate_sections) (Elf_Ehdr *e, const char *kernel_path,
     if (SUFFIX (is_data_section) (s, image_target))
       layout->kernel_size = SUFFIX (put_section) (s, i, layout->kernel_size, smd,
 						  image_target);
-
-#ifdef MKIMAGE_ELF32
-  if (image_target->elf_target == EM_ARM)
-    {
-      grub_size_t tramp;
-      layout->kernel_size = ALIGN_UP (layout->kernel_size + image_target->vaddr_offset,
-				      image_target->section_align) - image_target->vaddr_offset;
-
-      layout->kernel_size = ALIGN_UP (layout->kernel_size, 16);
-
-      tramp = arm_get_trampoline_size (e, smd->sections, smd->section_entsize,
-				       smd->num_sections, image_target);
-
-      layout->tramp_off = layout->kernel_size;
-      layout->kernel_size += ALIGN_UP (tramp, 16);
-    }
-#endif
 
   layout->bss_start = layout->kernel_size;
   layout->end = layout->kernel_size;
