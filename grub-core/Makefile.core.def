@@ -1177,9 +1177,26 @@ module = {
 };
 
 module = {
+  name = json;
+  common = lib/json/json.c;
+};
+
+module = {
+  name = afsplitter;
+  common = disk/AFSplitter.c;
+};
+
+module = {
   name = luks;
   common = disk/luks.c;
-  common = disk/AFSplitter.c;
+};
+
+module = {
+  name = luks2;
+  common = disk/luks2.c;
+  common = lib/gnulib/base64.c;
+  cflags = '$(CFLAGS_POSIX) $(CFLAGS_GNULIB)';
+  cppflags = '$(CPPFLAGS_POSIX) $(CPPFLAGS_GNULIB) -I$(srcdir)/lib/json';
 };
 
 module = {
@@ -1670,6 +1687,7 @@ module = {
 
 module = {
   name = datetime;
+  common = lib/datetime.c;
   cmos = lib/cmos_datetime.c;
   efi = lib/efi/datetime.c;
   uboot = lib/dummy/datetime.c;
@@ -1682,7 +1700,6 @@ module = {
   i386_xen_pvh = lib/xen/datetime.c;
 
   mips_arc = lib/arc/datetime.c;
-  enable = noemu;
 };
 
 module = {
@@ -1909,7 +1926,6 @@ module = {
   common = normal/autofs.c;
   common = normal/color.c;
   common = normal/completion.c;
-  common = normal/datetime.c;
   common = normal/menu.c;
   common = normal/menu_entry.c;
   common = normal/menu_text.c;

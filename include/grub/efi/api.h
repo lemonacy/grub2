@@ -531,7 +531,7 @@ typedef grub_uint64_t grub_efi_uint64_t;
 typedef grub_uint8_t grub_efi_char8_t;
 typedef grub_uint16_t grub_efi_char16_t;
 
-typedef grub_efi_intn_t grub_efi_status_t;
+typedef grub_efi_uintn_t grub_efi_status_t;
 
 #define GRUB_EFI_ERROR_CODE(value)	\
   ((((grub_efi_status_t) 1) << (sizeof (grub_efi_status_t) * 8 - 1)) | (value))
@@ -1295,7 +1295,7 @@ struct grub_efi_runtime_services
   (*convert_pointer) (grub_efi_uintn_t debug_disposition, void **address);
 
 #define GRUB_EFI_GLOBAL_VARIABLE_GUID \
-  { 0x8BE4DF61, 0x93CA, 0x11d2, { 0xAA, 0x0D, 0x00, 0xE0, 0x98, 0x03, 0x2B,0x8C }}
+  { 0x8BE4DF61, 0x93CA, 0x11d2, { 0xAA, 0x0D, 0x00, 0xE0, 0x98, 0x03, 0x2B, 0x8C }}
 
 
   grub_efi_status_t

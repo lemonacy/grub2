@@ -562,6 +562,24 @@ CPPFLAGS="$TARGET_CPPFLAGS"
 LDFLAGS="$TARGET_LDFLAGS"
 LIBS=""
 
+if test "x$target_m32" = x1; then
+  # Force 32-bit mode.
+  TARGET_CFLAGS="$TARGET_CFLAGS -m32"
+  TARGET_CCASFLAGS="$TARGET_CCASFLAGS -m32"
+  TARGET_CPPFLAGS="$TARGET_CPPFLAGS -m32"
+  TARGET_LDFLAGS="$TARGET_LDFLAGS -m32"
+  TARGET_MODULE_FORMAT="elf32"
+fi
+
+if test "x$target_m64" = x1; then
+  # Force 64-bit mode.
+  TARGET_CFLAGS="$TARGET_CFLAGS -m64"
+  TARGET_CCASFLAGS="$TARGET_CCASFLAGS -m64"
+  TARGET_CPPFLAGS="$TARGET_CPPFLAGS -m64"
+  TARGET_LDFLAGS="$TARGET_LDFLAGS -m64"
+  TARGET_MODULE_FORMAT="elf64"
+fi
+
 # debug flags.
 TARGET_CFLAGS="$TARGET_CFLAGS $WARN_FLAGS -g -Wredundant-decls -Wmissing-prototypes -Wmissing-declarations"
 TARGET_CCASFLAGS="$TARGET_CCASFLAGS -g"
@@ -750,24 +768,6 @@ if test "x$target_cpu" = xi386 && test "x$platform" != xemu; then
   TARGET_CFLAGS="$TARGET_CFLAGS -march=i386"
 fi
 
-if test "x$target_m32" = x1; then
-  # Force 32-bit mode.
-  TARGET_CFLAGS="$TARGET_CFLAGS -m32"
-  TARGET_CCASFLAGS="$TARGET_CCASFLAGS -m32"
-  TARGET_CPPFLAGS="$TARGET_CPPFLAGS -m32"
-  TARGET_LDFLAGS="$TARGET_LDFLAGS -m32"
-  TARGET_MODULE_FORMAT="elf32"
-fi
-
-if test "x$target_m64" = x1; then
-  # Force 64-bit mode.
-  TARGET_CFLAGS="$TARGET_CFLAGS -m64"
-  TARGET_CCASFLAGS="$TARGET_CCASFLAGS -m64"
-  TARGET_CPPFLAGS="$TARGET_CPPFLAGS -m64"
-  TARGET_LDFLAGS="$TARGET_LDFLAGS -m64"
-  TARGET_MODULE_FORMAT="elf64"
-fi
-
 if test "x$grub_cv_cc_target_clang" = xno && test "x$target_cpu" = xi386 && test "x$platform" != xemu && test "x$platform" != xefi; then
    TARGET_CFLAGS="$TARGET_CFLAGS -mrtd -mregparm=3"
 fi
@@ -853,6 +853,11 @@ if test x"$platform" != xemu ; then
        CFLAGS="$TARGET_CFLAGS -mno-inline-float-divide -mno-inline-sqrt -Werror"
        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],
 		         [grub_cv_target_cc_soft_float="-mno-inline-float-divide -mno-inline-sqrt"], [])
+    fi
+    if test "x$target_cpu" = xsh4; then
+       CFLAGS="$TARGET_CFLAGS -m4-nofpu -Werror"
+       AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[]])],
+		         [grub_cv_target_cc_soft_float="-m4-nofpu"], [])
     fi
     for cand in "-msoft-float -Xclang -msoft-float -Xclang -no-implicit-float" \
 		"-Xclang -msoft-float -Xclang -no-implicit-float" \
@@ -1263,6 +1268,7 @@ grub_CHECK_LINK_PIE
 # `-fPIE' or '-fpie' and '-pie' in the default specs.
 if [ x"$pie_possible" = xyes ]; then
   TARGET_CFLAGS="$TARGET_CFLAGS -fno-PIE -fno-pie"
+  TARGET_CCASFLAGS="$TARGET_CCASFLAGS -fno-PIE -fno-pie"
 fi
 
 if [ x"$link_nopie_needed" = xyes ] || [ x"$pie_possible" = xyes ]; then
@@ -1370,7 +1376,7 @@ fi
 
 # Check for libgcc symbols
 if test x"$platform" = xemu; then
-AC_CHECK_FUNCS(__udivsi3 __umodsi3 __divsi3 __modsi3 __divdi3 __moddi3 __udivdi3 __umoddi3 __ctzdi2 __ctzsi2 __aeabi_uidiv __aeabi_uidivmod __aeabi_idiv __aeabi_idivmod __aeabi_ulcmp __muldi3 __aeabi_lmul __aeabi_memcpy __aeabi_memcpy4 __aeabi_memcpy8 __aeabi_memclr __aeabi_memclr4 __aeabi_memclr8 __aeabi_memset __aeabi_lasr __aeabi_llsl __aeabi_llsr _restgpr_14_x __ucmpdi2 __ashldi3 __ashrdi3 __lshrdi3 __bswapsi2 __bswapdi2 __bzero __register_frame_info __deregister_frame_info ___chkstk_ms __chkstk_ms)
+AC_CHECK_FUNCS(__udivsi3 __umodsi3 __divsi3 __modsi3 __divdi3 __moddi3 __udivdi3 __umoddi3 __ctzdi2 __ctzsi2 __clzdi2 __aeabi_uidiv __aeabi_uidivmod __aeabi_idiv __aeabi_idivmod __aeabi_ulcmp __muldi3 __aeabi_lmul __aeabi_memcpy __aeabi_memcpy4 __aeabi_memcpy8 __aeabi_memclr __aeabi_memclr4 __aeabi_memclr8 __aeabi_memset __aeabi_lasr __aeabi_llsl __aeabi_llsr _restgpr_14_x __ucmpdi2 __ashldi3 __ashrdi3 __lshrdi3 __bswapsi2 __bswapdi2 __bzero __register_frame_info __deregister_frame_info ___chkstk_ms __chkstk_ms)
 fi
 
 if test "x$TARGET_APPLE_LINKER" = x1 ; then
@@ -1447,9 +1453,11 @@ LIBS="$tmp_LIBS"
 # Memory manager debugging.
 AC_ARG_ENABLE([mm-debug],
 	      AS_HELP_STRING([--enable-mm-debug],
-                             [include memory manager debugging]),
-              [AC_DEFINE([MM_DEBUG], [1],
-                         [Define to 1 if you enable memory manager debugging.])])
+                             [include memory manager debugging]))
+if test x$enable_mm_debug = xyes; then
+    AC_DEFINE([MM_DEBUG], [1],
+            [Define to 1 if you enable memory manager debugging.])
+fi
 
 AC_ARG_ENABLE([cache-stats],
 	      AS_HELP_STRING([--enable-cache-stats],
