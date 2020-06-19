@@ -23,7 +23,7 @@
 #include <grub/machine/memory.h>
 #include <grub/machine/kernel.h>
 
-#define ABS(x)	((x) - LOCAL (base) + GRUB_BOOT_MACHINE_KERNEL_ADDR + 0x200)
+#define ABS(x)	((x) - LOCAL (base) + GRUB_BOOT_MACHINE_KERNEL_ADDR + 0x200)		/* 0x8200 */
 
 	.file	"startup_raw.S"
 
@@ -83,13 +83,13 @@ LOCAL (codestart):
 	movw	%ax, %es
 
 	/* set up the real mode/BIOS stack */
-	movl	$GRUB_MEMORY_MACHINE_REAL_STACK, %ebp
+	movl	$GRUB_MEMORY_MACHINE_REAL_STACK, %ebp		/* (0x2000 - 0x10) = 0x1FE0(8k少一点) */
 	movl	%ebp, %esp
 
 	sti		/* we're safe again */
 
 	/* save the boot drive */
-	movb	%dl, LOCAL(boot_drive)
+	movb	%dl, LOCAL(boot_drive)						/* 0x80 */
 
 	/* reset disk system (%ah = 0) */
 	int	$0x13
@@ -114,7 +114,7 @@ LOCAL (codestart):
 	leal    LOCAL(reed_solomon_part), %eax
 	cld
 	call    EXT_C (grub_reed_solomon_recover)
-	jmp	post_reed_solomon
+	jmp		post_reed_solomon			/* 解压缩，及跳转到CS:0x100000处执行 */
 
 #include "../../../kern/i386/realmode.S"
 
@@ -141,7 +141,7 @@ LOCAL (codestart):
  * It also eats any keystrokes in the keyboard buffer.  :-(
  */
 
-grub_gate_a20:	
+grub_gate_a20:
 gate_a20_test_current_state:
 	/* first of all, test if already in a good state */
 	call	gate_a20_check_state
@@ -332,13 +332,13 @@ multiboot_trampoline:
 post_reed_solomon:
 
 #ifdef ENABLE_LZMA
-	movl	$GRUB_MEMORY_MACHINE_DECOMPRESSION_ADDR, %edi
+	movl	$GRUB_MEMORY_MACHINE_DECOMPRESSION_ADDR, %edi		/* 0x100000(1M) */
 #ifdef __APPLE__
 	movl	$decompressor_end, %esi
 #else
 	movl	$LOCAL(decompressor_end), %esi
 #endif
-	pushl	%edi
+	pushl	%edi		/* 保存0x100000(1M) */
 	movl	LOCAL (uncompressed_size), %ecx
 	leal	(%edi, %ecx), %ebx
 	/* Don't remove this push: it's an argument.  */
@@ -346,7 +346,7 @@ post_reed_solomon:
 	call	_LzmaDecodeA
 	pop	%ecx
 	/* _LzmaDecodeA clears DF, so no need to run cld */
-	popl	%esi
+	popl	%esi		/* 恢复0x100000(1M) */
 #endif
 
 	movl	LOCAL(boot_dev), %edx

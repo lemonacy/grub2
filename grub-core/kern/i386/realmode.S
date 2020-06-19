@@ -160,7 +160,7 @@ real_to_prot:
 	movl	%eax, %cr0
 
 	/* jump to relocation, flush prefetch queue, and reload %cs */
-	ljmpl	$GRUB_MEMORY_MACHINE_PROT_MODE_CSEG, $protcseg
+	ljmpl	$GRUB_MEMORY_MACHINE_PROT_MODE_CSEG, $protcseg			/* GRUB_MEMORY_MACHINE_PROT_MODE_CSEG=8 */
 
 	.code32
 protcseg:
